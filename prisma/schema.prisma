@@ -8,27 +8,73 @@ datasource db {
 }
 
 model User {
-  id         String    @id @default(cuid())
-  email      String    @unique
+  id         String            @id @default(cuid())
+  email      String            @unique
   name       String?
   password   String
   bodyweight Float?
   gender     String?
-  unitSystem String    @default("lbs")
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  unitSystem String            @default("lbs")
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
   workouts   Workout[]
+  clubs      ClubMember[]
+  templates  WorkoutTemplate[]
+}
+
+model Club {
+  id        String       @id @default(cuid())
+  name      String
+  code      String       @unique
+  createdAt DateTime     @default(now())
+  members   ClubMember[]
+}
+
+model ClubMember {
+  id       String   @id @default(cuid())
+  clubId   String
+  club     Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role     String   @default("member")
+  joinedAt DateTime @default(now())
+
+  @@unique([clubId, userId])
+  @@index([userId])
 }
 
 model Exercise {
-  id          String       @id @default(cuid())
-  name        String       @unique
-  category    String
-  equipment   String?
-  muscles     String[]
-  musclesSec  String[]
-  description String?
-  sets        WorkoutSet[]
+  id               String                    @id @default(cuid())
+  name             String                    @unique
+  category         String
+  equipment        String?
+  muscles          String[]
+  musclesSec       String[]
+  description      String?
+  sets             WorkoutSet[]
+  templateExercises WorkoutTemplateExercise[]
+}
+
+model WorkoutTemplate {
+  id        String                    @id @default(cuid())
+  userId    String
+  user      User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  createdAt DateTime                  @default(now())
+  updatedAt DateTime                  @updatedAt
+  exercises WorkoutTemplateExercise[]
+}
+
+model WorkoutTemplateExercise {
+  id         String          @id @default(cuid())
+  templateId String
+  template   WorkoutTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  exerciseId String
+  exercise   Exercise        @relation(fields: [exerciseId], references: [id])
+  order      Int             @default(0)
+  sets       Int             @default(3)
+
+  @@index([templateId])
 }
 
 model Workout {

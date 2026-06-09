@@ -7,12 +7,12 @@
   --border: #3f3f46;
   --foreground: #f4f4f5;
   --muted: #a1a1aa;
-  --accent: #6366f1;
-  --accent-glow: rgba(99, 102, 241, 0.3);
+  --accent: #ffffff;
+  --accent-glow: rgba(255, 255, 255, 0.06);
   --red: #ef4444;
   --green: #22c55e;
-  --cyan: #00d4ff;
-  --cyan-dim: rgba(0, 212, 255, 0.15);
+  --cyan: #a1a1aa;
+  --cyan-dim: rgba(161, 161, 170, 0.1);
 }
 
 @theme inline {
@@ -83,7 +83,7 @@ input[type="number"]::-webkit-outer-spin-button {
 /* Accent button */
 .btn-primary {
   background: var(--accent);
-  color: white;
+  color: var(--background);
   border: none;
   border-radius: 10px;
   padding: 12px 20px;

@@ -2,15 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart2, Dumbbell, History, Search, Trophy, User } from "lucide-react";
+import { BarChart2, CalendarDays, Dumbbell, History, Users2, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const TABS = [
   { href: "/dashboard", icon: Dumbbell, label: "Train" },
   { href: "/history", icon: History, label: "History" },
-  { href: "/exercises", icon: Search, label: "Moves" },
+  { href: "/calendar", icon: CalendarDays, label: "Calendar" },
   { href: "/progress", icon: BarChart2, label: "Progress" },
-  { href: "/rank", icon: Trophy, label: "Rank" },
+  { href: "/club", icon: Users2, label: "Club" },
   { href: "/settings", icon: User, label: "Profile" },
 ];
 
