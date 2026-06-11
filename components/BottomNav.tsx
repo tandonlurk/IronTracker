@@ -2,12 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart2, CalendarDays, Dumbbell, History, Users2, User } from "lucide-react";
+import { BarChart2, CalendarDays, Dumbbell, Users2, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const TABS = [
   { href: "/dashboard", icon: Dumbbell, label: "Train" },
-  { href: "/history", icon: History, label: "History" },
   { href: "/calendar", icon: CalendarDays, label: "Calendar" },
   { href: "/progress", icon: BarChart2, label: "Progress" },
   { href: "/club", icon: Users2, label: "Club" },

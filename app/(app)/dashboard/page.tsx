@@ -2,7 +2,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { formatRelativeDate, formatDuration, formatWeight } from "@/lib/utils";
-import { Plus, Flame, Trophy, TrendingUp } from "lucide-react";
+import { Plus, Flame, Trophy, TrendingUp, BookMarked, Play, Pencil, Dumbbell } from "lucide-react";
 
 export default async function DashboardPage() {
   const session = await auth();
@@ -38,9 +38,40 @@ export default async function DashboardPage() {
   });
   const weekVolumeKg = weekSets.reduce((sum, s) => sum + s.weight * s.reps, 0);
 
+  const templates = await prisma.workoutTemplate.findMany({
+    where: { userId },
+    include: {
+      exercises: {
+        include: { exercise: { select: { name: true } } },
+        orderBy: { order: "asc" },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 3,
+  });
+
   const firstName = user?.name?.split(" ")[0] ?? "Athlete";
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+
+  // Streak: consecutive days (including today) with at least one logged workout
+  const allWorkoutDates = await prisma.workout.findMany({
+    where: { userId },
+    select: { date: true },
+  });
+  const dateKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  const workoutDays = new Set(allWorkoutDates.map((w) => dateKey(new Date(w.date))));
+
+  const today = new Date();
+  const loggedToday = workoutDays.has(dateKey(today));
+
+  let streak = 0;
+  const cursor = new Date(today);
+  if (!loggedToday) cursor.setDate(cursor.getDate() - 1);
+  while (workoutDays.has(dateKey(cursor))) {
+    streak++;
+    cursor.setDate(cursor.getDate() - 1);
+  }
 
   return (
     <div className="flex flex-col gap-5 px-4 pt-12 pb-4">
@@ -50,7 +81,21 @@ export default async function DashboardPage() {
           <p className="text-sm" style={{ color: "var(--muted)" }}>
             {greeting},
           </p>
-          <h1 className="text-2xl font-bold">{firstName}</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold">{firstName}</h1>
+            <div
+              className="flex items-center gap-1"
+              style={{ color: loggedToday ? "#f97316" : "var(--muted)" }}
+              title={loggedToday ? "Workout logged today — streak active!" : "No workout logged today yet"}
+            >
+              <Flame
+                size={20}
+                fill={loggedToday ? "#f97316" : "none"}
+                style={{ filter: loggedToday ? "drop-shadow(0 0 6px #f97316)" : "none" }}
+              />
+              {streak > 0 && <span className="text-sm font-bold">{streak}</span>}
+            </div>
+          </div>
         </div>
         <div
           className="w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold"
@@ -63,7 +108,7 @@ export default async function DashboardPage() {
       {/* Stats row */}
       <div className="grid grid-cols-3 gap-3">
         {[
-          { icon: Flame, label: "Workouts", value: totalWorkouts },
+          { icon: Dumbbell, label: "Workouts", value: totalWorkouts },
           { icon: TrendingUp, label: "Total Sets", value: totalSets },
           {
             icon: Trophy,
@@ -90,11 +135,59 @@ export default async function DashboardPage() {
         Start Workout
       </Link>
 
+      {/* Templates */}
+      {templates.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-semibold text-base">Saved Workouts</h2>
+            <Link href="/templates" className="text-sm" style={{ color: "var(--muted)" }}>
+              See all
+            </Link>
+          </div>
+          <div className="flex flex-col gap-2">
+            {templates.map((t) => (
+              <div
+                key={t.id}
+                className="card flex items-center gap-3"
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium truncate">{t.name}</p>
+                  <p className="text-xs truncate mt-0.5" style={{ color: "var(--muted)" }}>
+                    {t.exercises.map((e) => `${e.exercise.name} (${e.sets}×${e.repRange})`).join(" · ") || "No exercises"}
+                  </p>
+                </div>
+                <Link
+                  href={`/templates/${t.id}`}
+                  className="p-2 rounded-lg flex-shrink-0"
+                  style={{ color: "var(--muted)" }}
+                >
+                  <Pencil size={14} />
+                </Link>
+                <Link
+                  href={`/workout?template=${t.id}`}
+                  className="w-9 h-9 flex items-center justify-center rounded-xl flex-shrink-0"
+                  style={{ background: "var(--accent)", color: "var(--background)" }}
+                >
+                  <Play size={15} />
+                </Link>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {templates.length === 0 && (
+        <Link href="/templates/new" className="btn-secondary">
+          <BookMarked size={16} />
+          Save a Workout Template
+        </Link>
+      )}
+
       {/* Recent workouts */}
       <div>
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold text-base">Recent Workouts</h2>
-          <Link href="/history" className="text-sm" style={{ color: "var(--accent)" }}>
+          <Link href="/calendar" className="text-sm" style={{ color: "var(--muted)" }}>
             See all
           </Link>
         </div>

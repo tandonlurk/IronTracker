@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Dumbbell, Search, X, Plus } from "lucide-react";
 
 interface Exercise {
@@ -14,12 +14,31 @@ interface Exercise {
 
 export default function StartWorkoutPage() {
   const router = useRouter();
-  const [workoutName, setWorkoutName] = useState(`Workout — ${new Date().toLocaleDateString("en-US", { weekday: "long" })}`);
+  const searchParams = useSearchParams();
+  const templateId = searchParams.get("template");
+
+  const [workoutName, setWorkoutName] = useState(
+    `Workout — ${new Date().toLocaleDateString("en-US", { weekday: "long" })}`
+  );
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [selected, setSelected] = useState<Exercise[]>([]);
   const [query, setQuery] = useState("");
-  const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
+
+  // Load template if provided
+  useEffect(() => {
+    if (!templateId) return;
+    fetch(`/api/templates/${templateId}`)
+      .then((r) => r.json())
+      .then((t) => {
+        if (t?.name) setWorkoutName(t.name);
+        if (t?.exercises?.length) {
+          setSelected(
+            t.exercises.map((te: { exercise: Exercise }) => te.exercise)
+          );
+        }
+      });
+  }, [templateId]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -48,9 +67,9 @@ export default function StartWorkoutPage() {
   }
 
   const EQUIPMENT_COLORS: Record<string, string> = {
-    barbell: "#6366f1",
+    barbell: "#e4e4e7",
     dumbbell: "#22c55e",
-    cable: "#00d4ff",
+    cable: "#a1a1aa",
     machine: "#f59e0b",
     bodyweight: "#ec4899",
   };
@@ -58,9 +77,11 @@ export default function StartWorkoutPage() {
   return (
     <div className="flex flex-col min-h-dvh px-4 pt-10 pb-6 gap-5">
       <div>
-        <h1 className="text-2xl font-bold mb-1">New Workout</h1>
+        <h1 className="text-2xl font-bold mb-1">
+          {templateId ? "Start from Template" : "New Workout"}
+        </h1>
         <p className="text-sm" style={{ color: "var(--muted)" }}>
-          Name it and pick your exercises.
+          {templateId ? "Review exercises, then start." : "Name it and pick your exercises."}
         </p>
       </div>
 
@@ -71,7 +92,7 @@ export default function StartWorkoutPage() {
         placeholder="Workout name"
       />
 
-      {/* Selected exercises chips */}
+      {/* Selected exercise chips */}
       {selected.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {selected.map((ex) => (
@@ -79,10 +100,10 @@ export default function StartWorkoutPage() {
               key={ex.id}
               onClick={() => toggleExercise(ex)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium"
-              style={{ background: "var(--accent)", color: "white" }}
+              style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--foreground)" }}
             >
               {ex.name}
-              <X size={14} />
+              <X size={13} style={{ color: "var(--muted)" }} />
             </button>
           ))}
         </div>
@@ -110,13 +131,13 @@ export default function StartWorkoutPage() {
               className="card flex items-center gap-3 text-left transition-all"
               style={{
                 borderColor: isSelected ? "var(--accent)" : "var(--border)",
-                background: isSelected ? "rgba(99,102,241,0.1)" : "var(--surface)",
+                background: isSelected ? "rgba(255,255,255,0.04)" : "var(--surface)",
               }}
             >
               <div
                 className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
                 style={{
-                  background: `${EQUIPMENT_COLORS[ex.equipment ?? ""] ?? "#6b7280"}22`,
+                  background: `${EQUIPMENT_COLORS[ex.equipment ?? ""] ?? "#6b7280"}18`,
                   color: EQUIPMENT_COLORS[ex.equipment ?? ""] ?? "#6b7280",
                 }}
               >
@@ -133,7 +154,7 @@ export default function StartWorkoutPage() {
                   className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
                   style={{ background: "var(--accent)" }}
                 >
-                  <Plus size={12} className="text-white" style={{ transform: "rotate(45deg)" }} />
+                  <X size={11} style={{ color: "var(--background)" }} />
                 </div>
               )}
             </button>
@@ -148,7 +169,7 @@ export default function StartWorkoutPage() {
         style={{ opacity: creating ? 0.6 : 1 }}
       >
         <Plus size={20} />
-        {creating ? "Starting..." : `Start Workout${selected.length > 0 ? ` (${selected.length} exercises)` : ""}`}
+        {creating ? "Starting..." : `Start Workout${selected.length > 0 ? ` (${selected.length})` : ""}`}
       </button>
     </div>
   );

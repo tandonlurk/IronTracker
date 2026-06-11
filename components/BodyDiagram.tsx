@@ -4,8 +4,11 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 
 interface Props {
-  primaryMuscles: string[];
-  secondaryMuscles: string[];
+  primaryMuscles?: string[];
+  secondaryMuscles?: string[];
+  // Optional 0-1 coverage score per muscle id. When provided, the diagram
+  // switches to a "trained vs. neglected" heatmap instead of primary/secondary.
+  heatmap?: Record<string, number>;
   className?: string;
 }
 
@@ -142,24 +145,33 @@ function BodySilhouette({ view }: { view: View }) {
   );
 }
 
-export default function BodyDiagram({ primaryMuscles, secondaryMuscles, className }: Props) {
+export default function BodyDiagram({ primaryMuscles = [], secondaryMuscles = [], heatmap, className }: Props) {
   const [view, setView] = useState<View>("front");
 
   const muscles = view === "front" ? FRONT_MUSCLES : BACK_MUSCLES;
 
   function getMuscleColor(id: string): string {
+    if (heatmap) return (heatmap[id] ?? 0) > 0 ? "var(--accent)" : "var(--red)";
     if (primaryMuscles.includes(id)) return "var(--red)";
     if (secondaryMuscles.includes(id)) return "#f97316"; // orange for secondary
     return "var(--cyan)";
   }
 
   function getMuscleOpacity(id: string): number {
+    if (heatmap) {
+      const coverage = heatmap[id] ?? 0;
+      return coverage > 0 ? 0.25 + coverage * 0.65 : 0.5;
+    }
     if (primaryMuscles.includes(id)) return 0.9;
     if (secondaryMuscles.includes(id)) return 0.65;
     return 0.12;
   }
 
   function getMuscleGlow(id: string): string {
+    if (heatmap) {
+      const coverage = heatmap[id] ?? 0;
+      return coverage > 0 ? "drop-shadow(0 0 5px var(--accent))" : "drop-shadow(0 0 6px var(--red))";
+    }
     if (primaryMuscles.includes(id)) return "drop-shadow(0 0 6px var(--red))";
     if (secondaryMuscles.includes(id)) return "drop-shadow(0 0 4px #f97316)";
     return "none";
@@ -179,7 +191,7 @@ export default function BodyDiagram({ primaryMuscles, secondaryMuscles, classNam
             className="px-5 py-2 capitalize transition-colors"
             style={{
               background: view === v ? "var(--accent)" : "transparent",
-              color: view === v ? "white" : "var(--muted)",
+              color: view === v ? "var(--background)" : "var(--muted)",
             }}
           >
             {v}
@@ -225,14 +237,29 @@ export default function BodyDiagram({ primaryMuscles, secondaryMuscles, classNam
 
       {/* Legend */}
       <div className="flex gap-5 text-xs" style={{ color: "var(--muted)" }}>
-        <span className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-full inline-block" style={{ background: "var(--red)" }} />
-          Primary
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-full inline-block" style={{ background: "#f97316" }} />
-          Secondary
-        </span>
+        {heatmap ? (
+          <>
+            <span className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-full inline-block" style={{ background: "var(--accent)" }} />
+              Trained
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-full inline-block" style={{ background: "var(--red)" }} />
+              Neglected
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-full inline-block" style={{ background: "var(--red)" }} />
+              Primary
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-full inline-block" style={{ background: "#f97316" }} />
+              Secondary
+            </span>
+          </>
+        )}
       </div>
     </div>
   );

@@ -1,16 +1,16 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
-import { Plus, Trash2, Check, ChevronDown, ChevronUp, Timer, X } from "lucide-react";
-import { cn, kgToLbs, lbsToKg } from "@/lib/utils";
+import { Plus, Trash2, Check, ChevronDown, ChevronUp, Timer, X, ArrowLeftRight } from "lucide-react";
+import { kgToLbs, lbsToKg } from "@/lib/utils";
 
 interface Set {
   id: string;
   exerciseId: string;
   setNumber: number;
   reps: number;
-  weight: number; // kg
+  weight: number;
   rpe?: number | null;
 }
 
@@ -40,24 +40,24 @@ export default function ActiveWorkoutPage() {
   const [searchResults, setSearchResults] = useState<{ id: string; name: string; category: string; equipment: string }[]>([]);
   const [finishing, setFinishing] = useState(false);
   const [lastSets, setLastSets] = useState<Record<string, LastSet>>({});
+  const [swappingId, setSwappingId] = useState<string | null>(null);
+  const [swapQuery, setSwapQuery] = useState("");
+  const [swapResults, setSwapResults] = useState<{ id: string; name: string; equipment: string }[]>([]);
 
   const startTime = useRef(Date.now());
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Load user unit preference
   useEffect(() => {
     fetch("/api/user").then((r) => r.json()).then((u) => {
       if (u?.unitSystem) setUnit(u.unitSystem);
     });
   }, []);
 
-  // Timer
   useEffect(() => {
     timerRef.current = setInterval(() => setTimer(Math.floor((Date.now() - startTime.current) / 1000)), 1000);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, []);
 
-  // Load existing workout data
   useEffect(() => {
     fetch(`/api/workouts/${id}`).then((r) => r.json()).then((w) => {
       if (w.name) setWorkoutName(w.name);
@@ -65,49 +65,27 @@ export default function ActiveWorkoutPage() {
         const blockMap: Record<string, ExerciseBlock> = {};
         for (const s of w.sets) {
           if (!blockMap[s.exerciseId]) {
-            blockMap[s.exerciseId] = {
-              exerciseId: s.exerciseId,
-              name: s.exercise.name,
-              sets: [],
-              collapsed: false,
-            };
+            blockMap[s.exerciseId] = { exerciseId: s.exerciseId, name: s.exercise.name, sets: [], collapsed: false };
           }
-          blockMap[s.exerciseId].sets.push({
-            id: s.id,
-            exerciseId: s.exerciseId,
-            setNumber: s.setNumber,
-            reps: s.reps,
-            weight: s.weight,
-            rpe: s.rpe,
-          });
+          blockMap[s.exerciseId].sets.push({ id: s.id, exerciseId: s.exerciseId, setNumber: s.setNumber, reps: s.reps, weight: s.weight, rpe: s.rpe });
         }
         setBlocks(Object.values(blockMap));
       }
     });
   }, [id]);
 
-  // Pre-populate exercises from URL params
   useEffect(() => {
     const exerciseIds = searchParams.get("exercises")?.split(",").filter(Boolean);
     if (!exerciseIds?.length) return;
-
     fetch(`/api/exercises?q=`)
       .then((r) => r.json())
       .then((all: { id: string; name: string }[]) => {
         const toAdd = all.filter((e) => exerciseIds.includes(e.id));
-        setBlocks(
-          toAdd.map((e) => ({
-            exerciseId: e.id,
-            name: e.name,
-            sets: [],
-            collapsed: false,
-          }))
-        );
+        setBlocks(toAdd.map((e) => ({ exerciseId: e.id, name: e.name, sets: [], collapsed: false })));
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Search exercises
   useEffect(() => {
     if (!adding) return;
     const t = setTimeout(() => {
@@ -117,6 +95,16 @@ export default function ActiveWorkoutPage() {
     }, 200);
     return () => clearTimeout(t);
   }, [exerciseSearch, adding]);
+
+  useEffect(() => {
+    if (!swappingId) return;
+    const t = setTimeout(() => {
+      fetch(`/api/exercises?q=${encodeURIComponent(swapQuery)}`)
+        .then((r) => r.json())
+        .then(setSwapResults);
+    }, 200);
+    return () => clearTimeout(t);
+  }, [swapQuery, swappingId]);
 
   async function fetchLastSets(exerciseId: string) {
     if (lastSets[exerciseId] !== undefined) return;
@@ -128,52 +116,51 @@ export default function ActiveWorkoutPage() {
   }
 
   function addExercise(ex: { id: string; name: string }) {
-    if (blocks.find((b) => b.exerciseId === ex.id)) {
-      setAdding(false);
-      return;
-    }
+    if (blocks.find((b) => b.exerciseId === ex.id)) { setAdding(false); return; }
     setBlocks((prev) => [...prev, { exerciseId: ex.id, name: ex.name, sets: [], collapsed: false }]);
     setAdding(false);
     fetchLastSets(ex.id);
+  }
+
+  async function swapExercise(currentId: string, replacement: { id: string; name: string }) {
+    const block = blocks.find((b) => b.exerciseId === currentId);
+    if (!block) return;
+    if (block.sets.length > 0) {
+      const ok = window.confirm(
+        `Swap ${block.name} with ${replacement.name}? Your ${block.sets.length} logged set${block.sets.length !== 1 ? "s" : ""} will be removed.`
+      );
+      if (!ok) return;
+      await Promise.all(
+        block.sets.map((s) => fetch(`/api/workouts/${id}/sets?setId=${s.id}`, { method: "DELETE" }))
+      );
+    }
+    setBlocks((prev) =>
+      prev.map((b) =>
+        b.exerciseId === currentId
+          ? { ...b, exerciseId: replacement.id, name: replacement.name, sets: [] }
+          : b
+      )
+    );
+    setSwappingId(null);
+    setSwapQuery("");
   }
 
   async function addSet(exerciseId: string) {
     const block = blocks.find((b) => b.exerciseId === exerciseId)!;
     const prev = block.sets[block.sets.length - 1];
     const last = lastSets[exerciseId];
-
     const defaultWeightKg = prev?.weight ?? last?.weight ?? 0;
     const defaultReps = prev?.reps ?? last?.reps ?? 8;
-
     const res = await fetch(`/api/workouts/${id}/sets`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        exerciseId,
-        setNumber: block.sets.length + 1,
-        reps: defaultReps,
-        weight: defaultWeightKg,
-      }),
+      body: JSON.stringify({ exerciseId, setNumber: block.sets.length + 1, reps: defaultReps, weight: defaultWeightKg }),
     });
     const newSet = await res.json();
-
     setBlocks((prev) =>
       prev.map((b) =>
         b.exerciseId === exerciseId
-          ? {
-              ...b,
-              sets: [
-                ...b.sets,
-                {
-                  id: newSet.id,
-                  exerciseId,
-                  setNumber: newSet.setNumber,
-                  reps: newSet.reps,
-                  weight: newSet.weight,
-                  rpe: newSet.rpe,
-                },
-              ],
-            }
+          ? { ...b, sets: [...b.sets, { id: newSet.id, exerciseId, setNumber: newSet.setNumber, reps: newSet.reps, weight: newSet.weight, rpe: newSet.rpe }] }
           : b
       )
     );
@@ -182,28 +169,17 @@ export default function ActiveWorkoutPage() {
   async function updateSet(setId: string, exerciseId: string, field: "reps" | "weight", rawValue: string) {
     const numValue = parseFloat(rawValue);
     if (isNaN(numValue)) return;
-
     const weightKg = field === "weight" ? (unit === "lbs" ? lbsToKg(numValue) : numValue) : undefined;
-
     setBlocks((prev) =>
       prev.map((b) =>
         b.exerciseId === exerciseId
-          ? {
-              ...b,
-              sets: b.sets.map((s) =>
-                s.id === setId
-                  ? { ...s, [field]: field === "weight" ? (weightKg ?? s.weight) : numValue }
-                  : s
-              ),
-            }
+          ? { ...b, sets: b.sets.map((s) => s.id === setId ? { ...s, [field]: field === "weight" ? (weightKg ?? s.weight) : numValue } : s) }
           : b
       )
     );
-
     const block = blocks.find((b) => b.exerciseId === exerciseId);
     const currentSet = block?.sets.find((s) => s.id === setId);
     if (!currentSet) return;
-
     await fetch(`/api/workouts/${id}/sets?setId=${setId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -230,7 +206,7 @@ export default function ActiveWorkoutPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ duration: timer }),
     });
-    router.push(`/history`);
+    router.push("/calendar");
   }
 
   function formatTimer(s: number) {
@@ -270,7 +246,6 @@ export default function ActiveWorkoutPage() {
             </span>
           </div>
         </div>
-
         <button
           className="px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-1.5"
           style={{ background: "var(--green)", color: "white" }}
@@ -286,26 +261,73 @@ export default function ActiveWorkoutPage() {
       <div className="flex flex-col gap-4 px-4 pt-4">
         {blocks.map((block) => (
           <div key={block.exerciseId} className="card">
-            {/* Exercise header */}
+            {/* Block header */}
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold">{block.name}</h3>
-              <button
-                onClick={() =>
-                  setBlocks((prev) =>
-                    prev.map((b) =>
-                      b.exerciseId === block.exerciseId ? { ...b, collapsed: !b.collapsed } : b
+              <h3 className="font-semibold flex-1 min-w-0 truncate pr-2">{block.name}</h3>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => {
+                    if (swappingId === block.exerciseId) { setSwappingId(null); setSwapQuery(""); }
+                    else { setSwappingId(block.exerciseId); setSwapQuery(""); setAdding(false); }
+                  }}
+                  className="p-1.5 rounded-lg"
+                  style={{ color: swappingId === block.exerciseId ? "var(--accent)" : "var(--muted)" }}
+                  title="Swap exercise"
+                >
+                  <ArrowLeftRight size={15} />
+                </button>
+                <button
+                  onClick={() =>
+                    setBlocks((prev) =>
+                      prev.map((b) =>
+                        b.exerciseId === block.exerciseId ? { ...b, collapsed: !b.collapsed } : b
+                      )
                     )
-                  )
-                }
-                style={{ color: "var(--muted)" }}
-              >
-                {block.collapsed ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
-              </button>
+                  }
+                  className="p-1.5 rounded-lg"
+                  style={{ color: "var(--muted)" }}
+                >
+                  {block.collapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+                </button>
+              </div>
             </div>
+
+            {/* Swap search panel */}
+            {swappingId === block.exerciseId && (
+              <div
+                className="mb-3 p-3 rounded-xl flex flex-col gap-2"
+                style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}
+              >
+                <p className="text-xs font-medium" style={{ color: "var(--muted)" }}>
+                  Replace with…
+                </p>
+                <input
+                  className="input text-sm py-2"
+                  placeholder="Search exercises..."
+                  value={swapQuery}
+                  onChange={(e) => setSwapQuery(e.target.value)}
+                  autoFocus
+                />
+                <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
+                  {swapResults.map((ex) => (
+                    <button
+                      key={ex.id}
+                      className="text-left px-3 py-2.5 rounded-lg text-sm"
+                      style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+                      onClick={() => swapExercise(block.exerciseId, ex)}
+                    >
+                      {ex.name}
+                      <span className="text-xs ml-2 capitalize" style={{ color: "var(--muted)" }}>
+                        {ex.equipment}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {!block.collapsed && (
               <>
-                {/* Set headers */}
                 {block.sets.length > 0 && (
                   <div
                     className="grid text-xs font-medium mb-2 px-1"
@@ -318,7 +340,6 @@ export default function ActiveWorkoutPage() {
                   </div>
                 )}
 
-                {/* Sets */}
                 {block.sets.map((set, i) => (
                   <div
                     key={set.id}
@@ -370,7 +391,7 @@ export default function ActiveWorkoutPage() {
 
         {/* Add exercise */}
         {!adding ? (
-          <button className="btn-secondary" onClick={() => setAdding(true)}>
+          <button className="btn-secondary" onClick={() => { setAdding(true); setSwappingId(null); }}>
             <Plus size={18} />
             Add Exercise
           </button>
@@ -393,7 +414,7 @@ export default function ActiveWorkoutPage() {
               {searchResults.map((ex) => (
                 <button
                   key={ex.id}
-                  className="text-left px-3 py-2.5 rounded-lg text-sm font-medium transition-colors"
+                  className="text-left px-3 py-2.5 rounded-lg text-sm font-medium"
                   style={{
                     background: "var(--surface2)",
                     color: blocks.find((b) => b.exerciseId === ex.id) ? "var(--accent)" : "var(--foreground)",

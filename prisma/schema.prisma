@@ -20,6 +20,7 @@ model User {
   workouts   Workout[]
   clubs      ClubMember[]
   templates  WorkoutTemplate[]
+  goals      Goal[]
 }
 
 model Club {
@@ -53,6 +54,7 @@ model Exercise {
   description      String?
   sets             WorkoutSet[]
   templateExercises WorkoutTemplateExercise[]
+  goals            Goal[]
 }
 
 model WorkoutTemplate {
@@ -73,8 +75,24 @@ model WorkoutTemplateExercise {
   exercise   Exercise        @relation(fields: [exerciseId], references: [id])
   order      Int             @default(0)
   sets       Int             @default(3)
+  repRange   String          @default("8-12")
 
   @@index([templateId])
+}
+
+model Goal {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exerciseId   String
+  exercise     Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  targetWeight Float
+  targetReps   Int      @default(1)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([userId, exerciseId])
+  @@index([userId])
 }
 
 model Workout {

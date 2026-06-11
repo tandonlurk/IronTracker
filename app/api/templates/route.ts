@@ -1,5 +1,6 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { findOrCreateExercise } from "@/lib/exercises";
 import { NextResponse } from "next/server";
 
 export async function GET() {
@@ -26,16 +27,19 @@ export async function POST(req: Request) {
 
   const { name, exercises } = await req.json();
 
+  const resolvedExercises = await Promise.all(
+    (exercises as { name: string; sets: number; repRange: string }[]).map(async (e, i) => {
+      const exercise = await findOrCreateExercise(e.name);
+      return { exerciseId: exercise.id, order: i, sets: e.sets, repRange: e.repRange };
+    })
+  );
+
   const template = await prisma.workoutTemplate.create({
     data: {
       userId: session.user.id,
       name,
       exercises: {
-        create: exercises.map((e: { exerciseId: string; order: number; sets: number }) => ({
-          exerciseId: e.exerciseId,
-          order: e.order,
-          sets: e.sets,
-        })),
+        create: resolvedExercises,
       },
     },
     include: {
